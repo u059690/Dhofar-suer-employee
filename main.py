@@ -1,21 +1,27 @@
 import os
 import logging
-import asyncio
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 from openai import OpenAI
 
-# إعداد تسجيل الأخطاء
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# 1. خادم ويب خفيف لإرضاء Render في الخطة المجانية
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "الموظف الخارق يعمل بنجاح 24/7!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# 2. إعدادات البوت والذكاء الاصطناعي
+logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-if not TELEGRAM_BOT_TOKEN or not OPENAI_API_KEY:
-    print("خطأ: يرجى التأكد من إضافة TELEGRAM_BOT_TOKEN و OPENAI_API_KEY في Render!")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -23,14 +29,13 @@ SYSTEM_PROMPT = """
 أنت الموظف الخارق والمساعد التنفيذي لمدير ترويج الاستثمار بوزارة التجارة والصناعة وترويج الاستثمار بمحافظة ظفار.
 مهامك ومبادئك:
 1. التحدث حصرياً باللغة العربية الفصحى الرسمية والرصينة.
-2. مساعدة المدير في صياغة الخطابات، المبادرات الاستراتيجية، إعداد بطاقات الفرص الاستثمارية، وتحليل البيانات.
+2. مساعدة المدير في صياغة الخطابات، المبادرات الاستراتيجية، وإعداد بطاقات الفرص.
 3. الالتزام بالدقة وعدم تقديم معلومات دون التأكد من منطقيتها ووثوقيتها.
 """
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-    
     user_message = update.message.text
     try:
         response = client.chat.completions.create(
@@ -46,15 +51,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"حدث خطأ أثناء المعالجة: {str(e)}")
 
-def main():
+def run_bot():
     if not TELEGRAM_BOT_TOKEN:
-        raise ValueError("TELEGRAM_BOT_TOKEN غير موجود")
-        
+        return
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
-    print("جاري تشغيل الموظف الخارق...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
-    main()
+    # تشغيل خادم الويب في مسار خلفي
+    threading.Thread(target=run_flask).start()
+    # تشغيل البوت
+    run_bot()
